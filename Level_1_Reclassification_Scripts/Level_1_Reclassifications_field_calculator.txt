@@ -1,0 +1,115 @@
+ASPECT RECLASSIFICATION 
+
+reclass(!Aspect_Mode_Numeric!)
+
+def reclass(aspect):
+    if aspect is None:
+        return None  # handle nulls
+    aspect = int(round(aspect))  # convert float to int safely
+    if aspect in [0, 1, 7]:
+        return 1
+    elif aspect in [2, 6]:
+        return 4
+    elif aspect in [3, 5]:
+        return 7
+    elif aspect in [4, -1]:
+        return 10
+    else:
+        return None
+
+
+
+SLOPE RECLASSIFICATION
+
+reclass_slope(!Slope_Mean_Percentage!)
+
+def reclass_slope(slope):
+    if slope is None:
+        return None  # keep nulls as null
+    if slope > 30:
+        return 1
+    elif 10.0 <= slope <= 29.9999:
+        return 3
+    elif 7.5 <= slope < 10.0:
+        return 7
+    elif 5.0 <= slope < 7.5:
+        return 8
+    elif 2.5 <= slope < 5.0:
+        return 9
+    elif 0 <= slope < 2.5:
+        return 10
+    else:
+        return None
+		
+		
+WIDTH RECLASSIFICATION 
+
+reclass(!Approximate_ROW_Width_Meters!)
+
+# Pre-logic code block
+def reclass(width):
+    if width >= 10.0 and width < 20.0:
+        return 6
+    elif width >= 20.0 and width < 30.0:
+        return 7
+    elif width >= 30.0 and width < 40.0:
+        return 8
+    elif width >= 40.0 and width < 50.0:
+        return 9
+    elif width >= 50.0:
+        return 10
+    else:
+        return None  # For values < 10
+		
+		
+GHI RECLASSIFICATION
+
+reclass(!GHI_Mean!)
+
+def reclass(ghi):
+    if ghi < 3:
+        return 1
+    elif 3 <= ghi <= 3.4999:
+        return 3
+    elif 3.5 <= ghi <= 3.9999:
+        return 4
+    elif 4.0 <= ghi <= 4.4999:
+        return 5
+    elif 4.5 <= ghi <= 4.9999:
+        return 8
+    elif 5.0 <= ghi <= 5.4999:
+        return 9
+    else:  # ghi > 5.5
+        return 10
+		
+		
+NLCD RECLASSIFICATION
+
+# Expression
+reclass(!NLCD_Code!)
+
+# Pre-logic code block
+def reclass(nlcd):
+    if nlcd in [11, 90, 95]:
+        return 1
+    elif nlcd in [41, 42, 43]:
+        return 3
+    elif nlcd == 24:
+        return 4
+    elif nlcd == 23:
+        return 6
+    elif nlcd in [51, 52]:
+        return 7
+    elif nlcd in [21, 22]:
+        return 8
+    elif nlcd == 31:
+        return 9
+    elif nlcd in [71, 72, 81, 82]:
+        return 10
+    else:
+        return None  # or 0 if you want to assign a default
+
+
+
+
+

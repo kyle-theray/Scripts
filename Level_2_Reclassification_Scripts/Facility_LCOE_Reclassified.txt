@@ -1,0 +1,42 @@
+import arcpy
+
+fc = r"C:\Users\KyleSteen.AzureAD\Documents\ArcGIS\Projects\L2_Suitability\Level_2_Analysis_AEP_GlintGlare_LCOE_Shape_Size_Substations_TransLines_4_15_2026.gdb\Hawaii_Level_2_Analysis_AEP_GlintGlare_LCOE_Shape_Size_Substations_TransLines"
+
+field_name = "Facility_LCOE_Mean_Reclassified"
+
+existing_fields = [f.name for f in arcpy.ListFields(fc)]
+if field_name not in existing_fields:
+    arcpy.management.AddField(fc, field_name, "DOUBLE")
+    print(f"Added field: {field_name}")
+
+def reclassify_lcoe(value):
+    if value is None:
+        return None
+    value = round(value, 4)
+    if value <= 28.51:
+        return 10
+    elif value <= 29.46:
+        return 9
+    elif value <= 30.97:
+        return 8
+    elif value <= 32.53:
+        return 7
+    elif value <= 34.25:
+        return 6
+    elif value <= 36.03:
+        return 5
+    elif value <= 38.01:
+        return 4
+    elif value <= 39.56:
+        return 3
+    elif value <= 41.6:
+        return 2
+    else:
+        return 1
+
+with arcpy.da.UpdateCursor(fc, ["Facility_LCOE_Mean", field_name]) as cursor:
+    for row in cursor:
+        row[1] = reclassify_lcoe(row[0])
+        cursor.updateRow(row)
+
+print("LCOE Reclassification complete!")
