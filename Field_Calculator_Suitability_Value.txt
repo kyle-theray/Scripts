@@ -1,0 +1,2 @@
+(!GHI_Reclassified! * .207) + (!NLCD_Reclassified! * .233) + (!Slope_Reclassified! * .138) + (!Aspect_Reclassified! * .117) + (!Width_Reclassified! * .305)
+
