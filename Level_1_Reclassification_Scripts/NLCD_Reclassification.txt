@@ -1,0 +1,40 @@
+import arcpy
+
+fc = r"C:\Users\KyleSteen\Documents\ArcGIS\Projects\Weighted_Overlays\Capacity_Density.gdb\CONUS_Level_1_Analysis_CapacityDensity"
+
+mean_f = "NLCD_Mode_Code"
+rec_f = "NLCD_Rec"
+
+nlcd_lookup = {
+    11: 1, 90: 1, 95: 1,
+    41: 3, 42: 3, 43: 3,
+    24: 4,
+    23: 6,
+    51: 7, 52: 7,
+    21: 8, 22: 8,
+    31: 9,
+    71: 10, 72: 10, 81: 10, 82: 10
+}
+
+with arcpy.da.UpdateCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+
+        if mean_val is None:
+            new_val = None
+        else:
+            nlcd_code = int(round(mean_val))
+            new_val = nlcd_lookup.get(nlcd_code, None)
+
+        cursor.updateRow((mean_val, new_val))
+
+print("NLCD reclassification finished.")
+
+
+bad_vals = set()
+
+with arcpy.da.SearchCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+        if mean_val is not None and rec_val is None:
+            bad_vals.add(mean_val)
+
+print("Unmapped NLCD_Mode_Code values:", sorted(bad_vals))

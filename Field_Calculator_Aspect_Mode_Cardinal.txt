@@ -1,0 +1,20 @@
+numeric_to_cardinal(!Aspect_Mode_Numeric!)
+
+def numeric_to_cardinal(val):
+    if val is None:
+        return None
+    
+    try:
+        val = int(round(val))
+    except:
+        return None
+
+    if val == -1:
+        return 'Flat'
+
+    directions = ['N','NE','E','SE','S','SW','W','NW']
+    
+    if 0 <= val <= 7:
+        return directions[val]
+    else:
+        return None

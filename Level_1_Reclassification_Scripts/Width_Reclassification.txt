@@ -1,0 +1,44 @@
+import arcpy
+
+fc = r"C:\Users\KyleSteen\Documents\ArcGIS\Projects\Weighted_Overlays\Capacity_Density.gdb\CONUS_Level_1_Analysis_CapacityDensity"
+
+mean_f = "approx_length_meters"
+rec_f = "Width_Rec"
+
+with arcpy.da.UpdateCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+
+        if mean_val is None:
+            new_val = None
+
+        elif mean_val < 20.0:
+            new_val = 6
+
+        elif mean_val < 30.0:
+            new_val = 7
+
+        elif mean_val < 40.0:
+            new_val = 8
+
+        elif mean_val < 50.0:
+            new_val = 9
+
+        else:  # mean_val >= 50.0
+            new_val = 10
+
+        cursor.updateRow((mean_val, new_val))
+
+print("Width (approx_length_meters) reclassification finished.")
+
+
+null_count = 0
+total_rows = 0
+
+with arcpy.da.SearchCursor(fc, [rec_f]) as cursor:
+    for (val,) in cursor:
+        total_rows += 1
+        if val is None:
+            null_count += 1
+
+print(f"Total rows: {total_rows}")
+print(f"Null values in {rec_f}: {null_count}")

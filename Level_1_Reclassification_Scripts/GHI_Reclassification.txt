@@ -1,0 +1,50 @@
+import arcpy
+
+fc = r"C:\Users\KyleSteen\Documents\ArcGIS\Projects\Weighted_Overlays\Capacity_Density.gdb\Hawaii_Level_1_Analysis_CapacityDensity"
+
+mean_f = "GHI_Mean"
+rec_f = "GHI_Rec"
+
+with arcpy.da.UpdateCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+
+        if mean_val is None:
+            new_val = None
+
+        elif mean_val < 3.0:
+            new_val = 1
+
+        elif mean_val < 3.5:
+            new_val = 3
+
+        elif mean_val < 4.0:
+            new_val = 4
+
+        elif mean_val < 4.5:
+            new_val = 5
+
+        elif mean_val < 5.0:
+            new_val = 8
+
+        elif mean_val < 5.5:
+            new_val = 9
+
+        else:
+            new_val = 10
+
+        cursor.updateRow((mean_val, new_val))
+
+print("Reclassification finished.")
+
+
+null_count = 0
+total_rows = 0
+
+with arcpy.da.SearchCursor(fc, [rec_f]) as cursor:
+    for (rec_val,) in cursor:
+        total_rows += 1
+        if rec_val is None:
+            null_count += 1
+
+print(f"Total rows: {total_rows}")
+print(f"Null values in {rec_f}: {null_count}")

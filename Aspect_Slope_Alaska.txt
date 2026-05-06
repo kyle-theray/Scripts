@@ -1,0 +1,153 @@
+// --------------------------------------
+// INPUTS
+// --------------------------------------
+var polygonsAsset = 'projects/ee-kylesteen/assets/Alaska_3_10';
+var exportFolder  = 'GEE_Exports';
+var exportScale   = 10;      // DEM resolution in meters
+var bufferDistance = 50;     // 50m buffer for 5x5 pixel neighborhood
+var targetCRS = 'EPSG:3338'; // Hawaii Albers (meters)
+
+// --------------------------------------
+// LOAD AND PREPARE POLYGONS
+// --------------------------------------
+var polygons = ee.FeatureCollection(polygonsAsset)
+  .select(['ROW_ID']);
+
+// Reproject polygons for calculations (planar CRS in meters)
+var polygonsProj = polygons.map(function(f){
+  return f.transform(targetCRS, 1);
+});
+
+// Buffer polygons ONLY for slope/aspect neighborhood support
+var polygonsBuffer = polygonsProj.map(function(f){
+  return f.buffer(bufferDistance);
+});
+
+// --------------------------------------
+// LOAD AND REPROJECT DEM
+// --------------------------------------
+var dem = ee.ImageCollection('USGS/3DEP/10m_collection').mosaic().toFloat();
+var demProj = dem.reproject({crs: targetCRS, scale: exportScale});
+
+// --------------------------------------
+// COMPUTE SLOPE AND ASPECT ON BUFFERED AREA
+// --------------------------------------
+var demClipped = demProj.clip(polygonsBuffer);
+
+// Terrain derivatives
+var slopeDeg  = ee.Terrain.slope(demClipped).rename('Slope_deg');
+var slopePerc = slopeDeg
+  .multiply(Math.PI / 180)
+  .tan()
+  .multiply(100)
+  .rename('Slope_per');
+
+var aspectDeg = ee.Terrain.aspect(demClipped).rename('Aspect_deg');
+
+// Convert aspect to 8 cardinal bins (0–7)
+var aspectCat = aspectDeg
+  .divide(45)
+  .add(0.5)
+  .floor()
+  .mod(8)
+  .rename('Aspect_cat');
+
+// --------------------------------------
+// VISUALIZATION PARAMETERS
+// --------------------------------------
+var demVis        = {min:0, max:4000, palette:['white','gray','black']};
+var slopeDegVis   = {min:0, max:60, palette:['white','yellow','orange','red']};
+var slopePercVis  = {min:0, max:60, palette:['white','yellow','orange','red']};
+var aspectDegVis  = {min:0, max:360, palette:['blue','cyan','green','yellow','orange','red','magenta','purple','blue']};
+var aspectCatVis  = {min:0, max:7, palette:['red','orange','yellow','green','cyan','blue','purple','magenta']};
+
+// Add layers to map
+Map.centerObject(polygonsProj, 10);
+Map.addLayer(demClipped, demVis, 'DEM (buffered)', false);
+Map.addLayer(slopeDeg, slopeDegVis, 'Slope (deg)', false);
+Map.addLayer(slopePerc, slopePercVis, 'Slope (%)', false);
+Map.addLayer(aspectDeg, aspectDegVis, 'Aspect (deg)', false);
+Map.addLayer(aspectCat, aspectCatVis, 'Aspect categorical (0–7)', false);
+Map.addLayer(polygonsProj, {color:'red'}, 'Original polygons', true);
+Map.addLayer(polygonsBuffer, {color:'blue', fillColor:'00000000'}, 'Buffer 50m', false);
+
+// --------------------------------------
+// FUNCTION TO COMPUTE ZONAL STATS
+// (Stats are computed on ORIGINAL polygons only)
+// --------------------------------------
+var computeStats = function(f) {
+  var geom = f.geometry();
+
+  // Mean slope (percent rise)
+  var slope_mean = slopePerc.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: geom,
+    scale: exportScale,
+    maxPixels: 1e13,
+    tileScale: 4
+  }).get('Slope_per');
+
+  // Mode aspect (categorical 0–7)
+  var aspect_mode = aspectCat.reduceRegion({
+    reducer: ee.Reducer.mode(),
+    geometry: geom,
+    scale: exportScale,
+    maxPixels: 1e13,
+    tileScale: 4
+  }).get('Aspect_cat');
+
+  return f.set({
+    'Slope_Mean_Percentage': slope_mean,
+    'Aspect_Mode_Numeric': aspect_mode
+  });
+};
+
+// Apply to all polygons
+var statsCollection = polygonsProj.map(computeStats);
+
+// --------------------------------------
+// EXPORT CSV
+// --------------------------------------
+Export.table.toDrive({
+  collection: statsCollection,
+  description: 'Alaska_ROW_Slope_Aspect',
+  folder: exportFolder,
+  fileFormat: 'CSV',
+  selectors: ['ROW_ID', 'Aspect_Mode_Numeric', 'Slope_Mean_Percentage', 'Square_Met']
+});
+
+// ======================================================================
+// SCIENTIFIC & METHODOLOGICAL NOTES
+// ======================================================================
+/*
+1. DEM SOURCE
+   - USGS 3DEP 10 m DEM (authoritative, native-resolution terrain data)
+   - Slope and aspect are derived directly from elevation values.
+
+2. CRS HANDLING
+   - Polygons and DEM are projected to EPSG:3338
+   - Planar CRS ensures correct slope/aspect computation.
+   - Projection is explicit and controlled.
+
+3. BUFFER LOGIC
+   - 50 m buffer ensures full neighborhood support for slope/aspect kernels.
+   - Zonal statistics are computed ONLY on the original polygons.
+   - Buffer is used strictly to prevent edge effects.
+
+4. ASPECT STATISTICS
+   - Aspect is converted to 8 cardinal classes (0–7) BEFORE zonal stats.
+   - Mode is used (not mean), avoiding circular-statistics bias.
+   - Output Aspect_Mode_Numeric values:
+       0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW
+
+5. SLOPE STATISTICS
+   - Slope is calculated in degrees, then converted to percent rise:
+       slope (%) = tan(slope_deg) × 100
+   - Mean slope percentage is appropriate for linear terrain variables.
+   - Values greater than 100% are valid and indicate slopes >45°
+
+6. PERFORMANCE
+   - Numeric-only processing (no strings) ensures fast execution.
+   */
+
+// ======================================================================

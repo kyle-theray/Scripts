@@ -1,0 +1,47 @@
+import arcpy
+
+fc = r"C:\Users\KyleSteen\Documents\ArcGIS\Projects\Weighted_Overlays\Capacity_Density.gdb\CONUS_Level_1_Analysis_CapacityDensity"
+
+mean_f = "Slope_Mean_Percentage"
+rec_f = "Slope_Rec"
+
+with arcpy.da.UpdateCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+
+        if mean_val is None:
+            new_val = None
+
+        elif mean_val < 2.5:
+            new_val = 10
+
+        elif mean_val < 5.0:
+            new_val = 9
+
+        elif mean_val < 7.5:
+            new_val = 8
+
+        elif mean_val < 10.0:
+            new_val = 7
+
+        elif mean_val < 30.0:
+            new_val = 3
+
+        else:  # mean_val >= 30
+            new_val = 1
+
+        cursor.updateRow((mean_val, new_val))
+
+print("Slope reclassification finished.")
+
+
+null_count = 0
+total_rows = 0
+
+with arcpy.da.SearchCursor(fc, [rec_f]) as cursor:
+    for (val,) in cursor:
+        total_rows += 1
+        if val is None:
+            null_count += 1
+
+print(f"Total rows: {total_rows}")
+print(f"Null values in {rec_f}: {null_count}")

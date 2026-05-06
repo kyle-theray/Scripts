@@ -1,0 +1,41 @@
+import arcpy
+
+fc = r"C:\Users\KyleSteen\Documents\ArcGIS\Projects\Weighted_Overlays\Capacity_Density.gdb\CONUS_Level_1_Analysis_CapacityDensity"
+
+mean_f = "Aspect_Mode_Numeric"
+rec_f = "Aspect_Rec"
+
+aspect_lookup = {
+    0: 1,
+    1: 1,
+    7: 1,
+    2: 4,
+    6: 4,
+    3: 7,
+    5: 7,
+    4: 10,
+    -1: 10
+}
+
+with arcpy.da.UpdateCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+
+        if mean_val is None:
+            new_val = None
+        else:
+            aspect_code = int(round(mean_val))
+            new_val = aspect_lookup.get(aspect_code, None)
+
+        cursor.updateRow((mean_val, new_val))
+
+print("Aspect reclassification finished.")
+
+
+bad_vals = set()
+
+with arcpy.da.SearchCursor(fc, [mean_f, rec_f]) as cursor:
+    for mean_val, rec_val in cursor:
+        if rec_val is None and mean_val is not None:
+            bad_vals.add(mean_val)
+
+print("Unmapped Aspect_Mode_Numeric values:", sorted(bad_vals))
