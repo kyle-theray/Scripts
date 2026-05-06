@@ -1,15 +1,12 @@
-Scripts created by Kyle Steen during his time at The Ray
+### Prerequisites
 
-###Prerequisites
+Make sure you have the following installed:
 
-#Make sure you have the following installed:
-
-Python (3.9+ recommended)
-ArcGIS Pro (if using arcpy)
-Required Python packages (depending on scripts):
-arcpy
-earthengine-api
-geemap
-matplotlib
-numpy
-pandas
+- Python (3.9+ recommended)
+- ArcGIS Pro (if using arcpy)
+- Required Python packages (depending on scripts):
+  - arcpy
+  - earthengine-api
+  - geemap
+  - numpy
+  - pandas
