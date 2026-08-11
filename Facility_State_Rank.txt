@@ -1,0 +1,163 @@
+"""
+calculate_facility_state_rank.py
+
+PURPOSE:
+    Rank every row within each state by Facility_Suitability_Value descending.
+    Tiebreaker is Facility_Capacity_kWdc descending.
+    Every polygon in the same cluster receives the same rank since they
+    share the same Facility_Suitability_Value and Facility_Capacity_kWdc.
+    Unlike Cluster_State_Rank, every row is ranked — clustered and non-clustered alike.
+
+RANKING LOGIC:
+    - Grouped by State_Name
+    - Primary sort   : Facility_Suitability_Value descending
+    - Tiebreaker     : Facility_Capacity_kWdc descending
+    - Rank 1         : Highest suitability facility in that state
+
+INPUTS:
+    - Feature class path (set in configuration below)
+
+OUTPUTS:
+    - Facility_State_Rank field updated in place
+
+NOTES:
+    - Run in ArcGIS Pro notebook
+    - Requires arcpy (available by default in ArcGIS Pro)
+    - Facility_Suitability_Value and Facility_Capacity_kWdc must already
+      be populated before running this script
+"""
+
+import arcpy
+from collections import defaultdict
+from datetime import datetime
+
+# ── USER CONFIGURATION ────────────────────────────────────────────────────────
+FEATURE_CLASS = r"C:\Users\KyleSteen.AzureAD\Documents\ArcGIS\Projects\L1_clustering\Level_1_Analysis_Clustering.gdb\Level_1_Analysis_Alaska_Clustering"  # <-- UPDATE
+# ─────────────────────────────────────────────────────────────────────────────
+
+start_time = datetime.now()
+print("=" * 60)
+print("CALCULATE FACILITY STATE RANK")
+print(f"Started : {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+print("=" * 60)
+
+# --- Validate feature class exists ---
+print(f"Feature class : {FEATURE_CLASS}")
+if not arcpy.Exists(FEATURE_CLASS):
+    raise FileNotFoundError(f"Feature class not found: {FEATURE_CLASS}")
+print("Feature class confirmed.")
+
+# --- Get total row count ---
+total_rows = int(arcpy.GetCount_management(FEATURE_CLASS).getOutput(0))
+print(f"Total rows    : {total_rows:,}")
+
+# ── STEP 1: BUILD FACILITY LOOKUP PER STATE ───────────────────────────────────
+print("=" * 60)
+print("STEP 1 - READING FACILITY VALUES PER STATE")
+print("=" * 60)
+
+# state_facilities[state][facility_id] = (suitability, capacity)
+# One entry per unique Facility_ID per state
+state_facilities = defaultdict(dict)
+skipped_nulls    = 0
+
+fields = ["Facility_ID", "State_Name", "Facility_Suitability_Value", "Facility_Capacity_kWdc"]
+print(f"Reading fields: {fields}")
+
+with arcpy.da.SearchCursor(FEATURE_CLASS, fields) as cursor:
+    for row in cursor:
+        facility_id  = row[0]
+        state_name   = row[1]
+        suitability  = row[2]
+        capacity     = row[3]
+
+        if facility_id is None or state_name is None or suitability is None or capacity is None:
+            skipped_nulls += 1
+            continue
+
+        # Store one representative value per Facility_ID per state
+        if facility_id not in state_facilities[state_name]:
+            state_facilities[state_name][facility_id] = (suitability, capacity)
+
+print("Read complete.")
+print(f"  Rows skipped (null values)          : {skipped_nulls:,}")
+print(f"  Unique states found                 : {len(state_facilities):,}")
+print(f"  States                              : {sorted(state_facilities.keys())}")
+
+total_facilities = sum(len(f) for f in state_facilities.values())
+print(f"  Total unique facilities             : {total_facilities:,}")
+
+# ── STEP 2: RANK FACILITIES WITHIN EACH STATE ─────────────────────────────────
+print("=" * 60)
+print("STEP 2 - RANKING FACILITIES WITHIN EACH STATE")
+print("=" * 60)
+
+# facility_rank[facility_id] = rank
+facility_rank = {}
+
+for state in sorted(state_facilities.keys()):
+    facilities = state_facilities[state]
+
+    # Sort by suitability descending, tiebreak by capacity descending
+    sorted_facilities = sorted(
+        facilities.items(),
+        key=lambda x: (x[1][0], x[1][1]),
+        reverse=True
+    )
+
+    print(f"  [{state}] {len(sorted_facilities):,} facilities ranked")
+
+    for rank, (facility_id, (suitability, capacity)) in enumerate(sorted_facilities, start=1):
+        facility_rank[facility_id] = rank
+
+        # Log top 3 per state for visibility
+        if rank <= 3:
+            print(f"    Rank {rank} -> Facility {facility_id} | Suitability: {suitability:.4f} | Capacity: {capacity:,.2f} kWdc")
+
+print(f"Total facilities ranked : {len(facility_rank):,}")
+
+# ── STEP 3: UPDATE Facility_State_Rank FIELD ──────────────────────────────────
+print("=" * 60)
+print("STEP 3 - UPDATING Facility_State_Rank FIELD")
+print("=" * 60)
+
+updated      = 0
+errors       = 0
+null_warnings = 0
+log_interval = max(1, total_rows // 10)
+
+print("Writing Facility_State_Rank values...")
+with arcpy.da.UpdateCursor(FEATURE_CLASS, ["Facility_ID", "Facility_State_Rank"]) as cursor:
+    for i, row in enumerate(cursor):
+        facility_id = row[0]
+
+        try:
+            if facility_id is None:
+                row[1] = None
+                null_warnings += 1
+            else:
+                row[1]   = facility_rank.get(facility_id, None)
+                updated += 1
+
+            cursor.updateRow(row)
+
+        except Exception as e:
+            print(f"  Error on row {i}: {e}")
+            errors += 1
+
+        if i % log_interval == 0 and i > 0:
+            pct = (i / total_rows) * 100
+            print(f"  Update progress: {i:,} / {total_rows:,} ({pct:.0f}%) | Updated: {updated:,}")
+
+# ── COMPLETE ──────────────────────────────────────────────────────────────────
+end_time = datetime.now()
+elapsed  = end_time - start_time
+
+print("=" * 60)
+print("COMPLETE")
+print(f"Finished                        : {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"Elapsed                         : {str(elapsed).split('.')[0]}")
+print(f"Rows updated with rank value    : {updated:,}")
+print(f"Rows with null Facility_ID      : {null_warnings:,}")
+print(f"Errors                          : {errors:,}")
+print("=" * 60)
